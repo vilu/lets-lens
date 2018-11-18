@@ -143,7 +143,7 @@ modify ::
   -> a
   -> a
 modify =
-  error "todo: modify"
+  \(Lens s g) f a -> s a $ f $ g a
 
 -- | An alias for @modify@.
 (%~) ::
@@ -173,7 +173,7 @@ infixr 4 %~
   -> a
   -> a
 (.~) =
-  error "todo: (.~)"
+  \l b a -> modify l (const b) a
 
 infixl 5 .~
 
@@ -194,7 +194,7 @@ fmodify ::
   -> a
   -> f a
 fmodify =
-  error "todo: fmodify"
+  \(Lens s g) fn a -> fmap (\b -> s a b) $ fn $ g a
 
 -- |
 --
@@ -210,7 +210,7 @@ fmodify =
   -> a
   -> f a
 (|=) =
-  error "todo: (|=)"
+  \(Lens s _) fb a -> fmap (\b -> s a b) fb
 
 infixl 5 |=
 
@@ -227,7 +227,10 @@ infixl 5 |=
 fstL ::
   Lens (x, y) x
 fstL =
-  error "todo: fstL"
+  Lens s g
+    where
+      s (_, r) x = (x, r)
+      g (l, _) = l
 
 -- |
 --
@@ -242,7 +245,10 @@ fstL =
 sndL ::
   Lens (x, y) y
 sndL =
-  error "todo: sndL"
+  Lens s g
+    where
+      s (l, _) x = (l, x)
+      g (_, r) = r
 
 -- |
 --
@@ -268,7 +274,12 @@ mapL ::
   k
   -> Lens (Map k v) (Maybe v)
 mapL =
-  error "todo: mapL"
+  \key -> (Lens (setter key)  (getter key))
+    where
+      setter k m (Just x) = Map.insert k x m
+      setter k m Nothing = Map.delete k m
+
+      getter k m = Map.lookup k m
 
 -- |
 --
@@ -294,7 +305,12 @@ setL ::
   k
   -> Lens (Set k) Bool
 setL =
-  error "todo: setL"
+  \key -> Lens (setter key) (getter key) 
+    where
+      setter k s True = Set.insert k s
+      setter k s False = Set.delete k s
+
+      getter k s = Set.member k s 
 
 -- |
 --
@@ -308,7 +324,8 @@ compose ::
   -> Lens a b
   -> Lens a c
 compose =
-  error "todo: compose"
+  \(Lens sbc gbc) (Lens sab gab) ->
+    Lens (\a -> sab a . (sbc . gab) a) (gbc . gab)
 
 -- | An alias for @compose@.
 (|.) ::
@@ -330,7 +347,7 @@ infixr 9 |.
 identity ::
   Lens a a
 identity =
-  error "todo: identity"
+  Lens (\_ a -> a) (id)
 
 -- |
 --
@@ -344,7 +361,8 @@ product ::
   -> Lens c d
   -> Lens (a, c) (b, d)
 product =
-  error "todo: product"
+  \(Lens (sab) gab) (Lens scd gcd) ->
+    Lens (\(a, c) (b, d) -> (sab a b, scd c d)) (\(a, c) -> (gab a, gcd c))
 
 -- | An alias for @product@.
 (***) ::
@@ -374,7 +392,8 @@ choice ::
   -> Lens b x
   -> Lens (Either a b) x
 choice =
-  error "todo: choice"
+ \(Lens sax gax) (Lens sbx gbx) ->  
+    Lens(either (\a x -> Left $ sax a x) (\b x -> Right $ sbx b x)) (either gax gbx)
 
 -- | An alias for @choice@.
 (|||) ::
@@ -462,7 +481,7 @@ getSuburb ::
   Person
   -> String
 getSuburb =
-  error "todo: getSuburb"
+  get (compose suburbL  addressL)
 
 -- |
 --
@@ -476,7 +495,7 @@ setStreet ::
   -> String
   -> Person
 setStreet =
-  error "todo: setStreet"
+  set (compose streetL addressL)
 
 -- |
 --
@@ -489,7 +508,7 @@ getAgeAndCountry ::
   (Person, Locality)
   -> (Int, String)
 getAgeAndCountry =
-  error "todo: getAgeAndCountry"
+  get $ product ageL countryL
 
 -- |
 --
@@ -501,7 +520,7 @@ getAgeAndCountry =
 setCityAndLocality ::
   (Person, Address) -> (String, Locality) -> (Person, Address)
 setCityAndLocality =
-  error "todo: setCityAndLocality"
+  set $ product (compose cityL (compose localityL addressL)) localityL
   
 -- |
 --
@@ -514,7 +533,7 @@ getSuburbOrCity ::
   Either Address Locality
   -> String
 getSuburbOrCity =
-  error "todo: getSuburbOrCity"
+  get $ choice suburbL cityL
 
 -- |
 --
@@ -528,7 +547,7 @@ setStreetOrState ::
   -> String
   -> Either Person Locality
 setStreetOrState =
-  error "todo: setStreetOrState"
+  set $ choice (compose streetL addressL) stateL
 
 -- |
 --
@@ -541,4 +560,4 @@ modifyCityUppercase ::
   Person
   -> Person
 modifyCityUppercase =
-  error "todo: modifyCityUppercase"
+  modify (compose cityL (compose localityL addressL)) (map toUpper)

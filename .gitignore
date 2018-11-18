@@ -4,6 +4,7 @@
 # CABAL
 /dist
 /cabal-dev
+/dist-newstyle
 /.cabal-sandbox
 /cabal.sandbox.config
 

@@ -361,8 +361,8 @@ product ::
   -> Lens c d
   -> Lens (a, c) (b, d)
 product =
-  \(Lens (sab) gab) (Lens scd gcd) ->
-    Lens (\(a, c) (b, d) -> (sab a b, scd c d)) (\(a, c) -> (gab a, gcd c))
+  \(Lens (setab) getab) (Lens setcd getcd) ->
+    Lens (\(a, c) (b, d) -> (setab a b, setcd c d)) (\(a, c) -> (getab a, getcd c))
 
 -- | An alias for @product@.
 (***) ::

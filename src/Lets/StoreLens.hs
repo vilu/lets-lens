@@ -63,7 +63,7 @@ import Prelude hiding (product)
 setS ::
   Store s a
   -> s
-  -> a
+  -> a  
 setS (Store s _) =
   s
 
@@ -77,27 +77,28 @@ mapS ::
   (a -> b)
   -> Store s a
   -> Store s b
-mapS =
-  error "todo: mapS"
+mapS fn (Store sa s) = Store (\s' -> fn $ sa s') s
 
 duplicateS ::
   Store s a
   -> Store s (Store s a)
 duplicateS =
-  error "todo: duplicateS"
+  \st -> mapS (\sa -> Store (\_ -> sa) (getS st)) st
 
 extendS ::
   (Store s a -> b)
   -> Store s a
   -> Store s b
-extendS =
-  error "todo: extendS"
+extendS sab sa = Store sb s
+                  where
+                    s = getS sa
+                    sb _ = sab sa
 
 extractS ::
   Store s a
   -> a
 extractS =
-  error "todo: extractS"
+  \sa -> setS sa $ getS sa  
 
 ----
 
@@ -190,8 +191,9 @@ modify ::
   -> (b -> b)
   -> a
   -> a
-modify =
-  error "todo: modify"
+modify l f a =
+  set l a $ f $ get l a 
+
 
 -- | An alias for @modify@.
 (%~) ::
@@ -220,8 +222,8 @@ infixr 4 %~
   -> b
   -> a
   -> a
-(.~) =
-  error "todo: (.~)"
+(.~) l b a =
+  set l a b
 
 infixl 5 .~
 
@@ -241,8 +243,8 @@ fmodify ::
   -> (b -> f b)
   -> a
   -> f a
-fmodify =
-  error "todo: fmodify"
+fmodify l f a =
+  set l a <$> f (get l a)  
   
 -- |
 --
@@ -257,8 +259,8 @@ fmodify =
   -> f b
   -> a
   -> f a
-(|=) =
-  error "todo: (|=)"
+(|=) l fb a =
+  set l a <$> fb
 
 infixl 5 |=
 
@@ -274,8 +276,13 @@ infixl 5 |=
 -- prop> let types = (x :: Int, y :: String) in setsetLaw fstL (x, y) z
 fstL ::
   Lens (x, y) x
+  -- Store x (x,y)
 fstL =
-  error "todo: fstL"
+  Lens (\xy -> Store (f xy) (g xy))
+    where
+      f xy x = (x, snd xy)
+      g xy = fst xy
+
 
 -- |
 --
@@ -290,7 +297,10 @@ fstL =
 sndL ::
   Lens (x, y) y
 sndL =
-  error "todo: sndL"
+  Lens (\xy -> Store (f xy) (g xy))
+    where
+      f xy y = (fst xy, y)
+      g xy = snd xy
 
 -- |
 --
@@ -315,9 +325,12 @@ mapL ::
   Ord k =>
   k
   -> Lens (Map k v) (Maybe v)
-mapL =
-  error "todo: mapL"
-
+mapL k =
+  Lens (\m -> Store (f m) (g m))
+    where
+      f m (Just a) = Map.insert k a m
+      f m Nothing = Map.delete k m
+      g m = Map.lookup k m
 -- |
 --
 -- >>> get (setL 3) (Set.fromList [1..5])
@@ -341,8 +354,12 @@ setL ::
   Ord k =>
   k
   -> Lens (Set k) Bool
-setL =
-  error "todo: setL"
+setL k =
+  Lens (\s -> Store (f s) (g s))
+    where
+      f s True = Set.insert k s
+      f s False = Set.delete k s
+      g s = Set.member k s
 
 -- |
 --
@@ -355,8 +372,11 @@ compose ::
   Lens b c
   -> Lens a b
   -> Lens a c
-compose =
-  error "todo: compose"
+compose lbc lab =
+  Lens (\a -> Store (f a) (g a))
+    where
+      f a c = set lab a $ set lbc (get lab a) c
+      g a = get lbc $ get lab a 
 
 -- | An alias for @compose@.
 (|.) ::
@@ -378,7 +398,9 @@ infixr 9 |.
 identity ::
   Lens a a
 identity =
-  error "todo: identity"
+  Lens (\a -> Store (f a) a)
+    where
+      f _ a = a -- any better function here?
     
 -- |
 --
@@ -391,8 +413,11 @@ product ::
   Lens a b
   -> Lens c d
   -> Lens (a, c) (b, d)
-product =
-  error "todo: product"
+product lab lcd =
+  Lens (\ac -> Store (bdac ac) (bd ac))
+    where
+      bdac (a,c) (b, d) = (set lab a b, set lcd c d)
+      bd (a,c) = (get lab a, get lcd c)
 
 -- | An alias for @product@.
 (***) ::
@@ -421,9 +446,13 @@ choice ::
   Lens a x
   -> Lens b x
   -> Lens (Either a b) x
-choice =
-  error "todo: choice"
-
+choice lax lbx =
+  Lens (\eab -> Store (xab eab) (x eab))
+    where
+      xab (Left a) x = Left $ set lax a x
+      xab (Right b) x  = Right $ set lbx b x
+      x (Left a) =  get lax a
+      x (Right b) =  get lbx b
 -- | An alias for @choice@.
 (|||) ::
   Lens a x
@@ -510,7 +539,7 @@ getSuburb ::
   Person
   -> String
 getSuburb =
-  error "todo: getSuburb"
+  get $ compose suburbL  addressL
 
 -- |
 --
@@ -524,7 +553,7 @@ setStreet ::
   -> String
   -> Person
 setStreet =
-  error "todo: setStreet"
+  set $ compose streetL addressL 
 
 -- |
 --
@@ -537,7 +566,7 @@ getAgeAndCountry ::
   (Person, Locality)
   -> (Int, String)
 getAgeAndCountry =
-  error "todo: getAgeAndCountry"
+  get $ product ageL countryL
 
 -- |
 --
@@ -548,9 +577,16 @@ getAgeAndCountry =
 -- (Person 28 "Mary" (Address "83 Mary Ln" "Maryland" (Locality "Some Other City" "Western Mary" "Maristan")),Address "15 Fred St" "Fredville" (Locality "Mary Mary" "Western Mary" "Maristan"))
 setCityAndLocality ::
   (Person, Address) -> (String, Locality) -> (Person, Address)
-setCityAndLocality =
-  error "todo: setCityAndLocality"
+setCityAndLocality (p, a) (c, l) =
+  -- (set (compose cityL localityL) (), set (compose localityL addressL) a l)
+  (set personCityL p c , set addressLocalityL a l)
+    where 
+      personCityL :: Lens Person String
+      personCityL = compose cityL $ compose localityL addressL 
   
+      addressLocalityL :: Lens Address Locality
+      addressLocalityL = localityL
+
 -- |
 --
 -- >>> getSuburbOrCity (Left maryAddress)
@@ -561,8 +597,11 @@ setCityAndLocality =
 getSuburbOrCity ::
   Either Address Locality
   -> String
-getSuburbOrCity =
-  error "todo: getSuburbOrCity"
+getSuburbOrCity eal =
+  let 
+    citySuburbL = choice suburbL cityL
+  in
+    get citySuburbL  eal
 
 -- |
 --
@@ -575,8 +614,11 @@ setStreetOrState ::
   Either Person Locality
   -> String
   -> Either Person Locality
-setStreetOrState =
-  error "todo: setStreetOrState"
+setStreetOrState eal str =
+  let 
+    streetOrStateL = choice (compose streetL addressL) stateL
+  in
+    set streetOrStateL eal str
 
 -- |
 --
@@ -589,4 +631,4 @@ modifyCityUppercase ::
   Person
   -> Person
 modifyCityUppercase =
-  error "todo: modifyCityUppercase"
+  modify (compose cityL (compose localityL addressL)) (map toUpper)
